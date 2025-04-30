@@ -1,0 +1,5 @@
+.venv
+.python-version
+uv.lock
+test_data/
+.DS_Store
