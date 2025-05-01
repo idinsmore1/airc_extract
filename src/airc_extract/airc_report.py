@@ -78,9 +78,10 @@ class AircReport:
         """Extract the report data from the dicom files"""
         self.validate_identifiers()
         self.extract_measurements()
+        self.merge_lung_data()
         return self.report_data
 
-    def validate_identifiers(self):
+    def validate_identifiers(self) -> None:
         """validate that the identifiers are present in the dicom data and are equal"""
         # Get reference values from first DICOM
         ref = self.dicom_data[0]
@@ -113,8 +114,9 @@ class AircReport:
         self.report_data["scan_date"] = date.fromisoformat(ref.StudyDate).strftime(
             "%Y-%m-%d"
         )
+        
 
-    def extract_measurements(self):
+    def extract_measurements(self) -> None:
         for data in self.dicom_data:
             try:
                 measurement, measures = self._extract_measurement_from_dicom_data(data)
@@ -122,6 +124,27 @@ class AircReport:
             except ContentMissingError as e:
                 continue
 
+    def merge_lung_data(self):
+        if self.report_data.get('pulmonary_densities') is not None and self.report_data.get('lung_parenchyma') is not None:
+            # If we have both pulmonary densities and lung parenchyma, merge them
+            combined_data = {}
+            for location in self.lung_location_map.values():
+                pulm_data = self.report_data['pulmonary_densities'].get(location, {})
+                par_data = self.report_data['lung_parenchyma'].get(location, {})
+                combined_data[location] = {**pulm_data, **par_data}
+            self.report_data['lung_data'] = combined_data
+            # Remove the old data
+            del self.report_data['pulmonary_densities']
+            del self.report_data['lung_parenchyma']
+        # If we only have one of the two, rename it to lung_data
+        else:
+            if self.report_data.get('pulmonary_densities') is not None:
+                self.report_data['lung_data'] = self.report_data['pulmonary_densities']
+                del self.report_data['pulmonary_densities']
+            elif self.report_data.get('lung_parenchyma') is not None:
+                self.report_data['lung_data'] = self.report_data['lung_parenchyma']
+                del self.report_data['lung_parenchyma']
+    
     def _extract_measurement_from_dicom_data(
         self, data: dcm.DataElement
     ) -> tuple[str, dict]:
@@ -331,7 +354,7 @@ class AircReport:
                         continue
                     # Get the measurement value
                     measurement_value = seq.MeasuredValueSequence[0].NumericValue
-                    parenchyma_data[location_id] = float(measurement_value)
+                    parenchyma_data[location_id] = {'low_parenchyma_hu_percent': float(measurement_value)}
         return parenchyma_data
 
     def _extract_coronary_calcium_measurements(self, measure_content: dcm.DataElement) -> dict:
