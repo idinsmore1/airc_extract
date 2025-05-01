@@ -249,7 +249,7 @@ class AircReport:
         lesion_data['lesion_count'] = len(lesion_list)
         for idx, lesion in enumerate(lesion_list):
             lesion_id, lesion_measurements = self._extract_lung_lesion_measurement(lesion, idx)
-            if lesion_id and lesion_measurements:
+            if lesion_id is not None and lesion_measurements is not None:
                 lesion_data[lesion_id] = lesion_measurements
         return lesion_data
 
@@ -297,7 +297,6 @@ class AircReport:
                     lesion_measurements[measurement_type] = None
         return lesion_id, lesion_measurements
             
-
     def _extract_lung_parenchyma_measurements(self, measure_content: dcm.DataElement) -> dict:
         """Extract the lung parenchyma measurements from the dicom data
         :param measure_content: the dicom data
@@ -328,15 +327,66 @@ class AircReport:
                 calc_data[measure_name] = float(measure_value)
         return calc_data
 
-
-
     def _extract_spine_measurements(self, measure_content: dcm.DataElement) -> dict:
         """Extract the spine measurements from the dicom data
         :param measure_content: the dicom data
         :return: a dictionary of the spine measurements
         """
         # Get the measurements
-        pass
+        spine_data = {}
+        # Each sequence in this content is a vertebra's measurements
+        for vertebra in measure_content.ContentSequence:
+            vertebra_name, vertebra_measurements = self._extract_vertebra_measurement(vertebra)
+            if not vertebra_name or not vertebra_measurements:
+                continue
+            # If we have a vertebra name and measurements, add them to the dictionary
+            spine_data[vertebra_name] = vertebra_measurements
+        return spine_data
+
+    def _extract_vertebra_measurement(self, vertebra: dcm.DataElement) -> tuple[str, dict]:
+        """Extract the vertebra measurements from the dicom data
+        :param vertebra: the vertebra content sequence
+        :return: a tuple of the vertebra name and the measurements
+        """
+        if not hasattr(vertebra, "ContentSequence"):
+            logger.warning(f'No ContentSequence found in for a vertebra in {self.current_filename}')
+            return None, None
+        # These are the internal codes used by the AIRC for the spine measurements
+        measurement_seq_code = '121207'
+        direction_code = '106233006'
+        status_code = 'CHECTCT0001'
+
+        vertebra_name = None
+        vertebra_measurements = {}
+        for seq in vertebra.ContentSequence:
+            descriptor = seq.ConceptNameCodeSequence[0]
+            if descriptor.CodeValue == self.tracking_code:
+                vertebra_name = seq.TextValue
+            if descriptor.CodeValue == measurement_seq_code:
+                if not hasattr(seq, "MeasuredValueSequence"):
+                    # If there is no measurement, skip this sequence
+                    continue
+                if not hasattr(seq, "ContentSequence"):
+                    # If there is no content sequence, skip this sequence as we need to know the direction and status
+                    continue
+                # Get the measurement value
+                measurement_value = seq.MeasuredValueSequence[0].NumericValue
+                direction = None
+                status = None
+                for content in seq.ContentSequence:
+                    if content.ConceptNameCodeSequence[0].CodeValue == direction_code:
+                        direction = content.ConceptCodeSequence[0].CodeMeaning.lower()
+
+                    if content.ConceptNameCodeSequence[0].CodeValue == status_code:
+                        status = content.ConceptCodeSequence[0].CodeMeaning.lower()
+                if direction is None or status is None:
+                    # If we don't have a direction or status, skip this measurement
+                    continue
+                vertebra_measurements[direction] = {'length_mm': float(measurement_value), 'status': status}
+        if not vertebra_name or not vertebra_measurements:
+            logger.warning(f'No vertebra name or measurements found for a vertebra in {self.current_filename}')
+            return None, None
+        return vertebra_name, vertebra_measurements
 
     def _extract_pulmonary_density_measurements(self, measure_content: dcm.DataElement) -> dict:
         """Extract the pulmonary density measurements from the dicom data
