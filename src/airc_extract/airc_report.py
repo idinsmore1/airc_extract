@@ -78,7 +78,6 @@ class AircReport:
         """Extract the report data from the dicom files"""
         self.validate_identifiers()
         self.extract_measurements()
-        self.merge_lung_data()
         return self.report_data
 
     def validate_identifiers(self) -> None:
@@ -123,8 +122,9 @@ class AircReport:
                 self.report_data[measurement] = measures
             except ContentMissingError as e:
                 continue
+        self._merge_lung_data()
 
-    def merge_lung_data(self):
+    def _merge_lung_data(self):
         if self.report_data.get('pulmonary_densities') is not None and self.report_data.get('lung_parenchyma') is not None:
             # If we have both pulmonary densities and lung parenchyma, merge them
             combined_data = {}
@@ -305,13 +305,23 @@ class AircReport:
             'max_3d_diameter_mm': None,
             'volume_mm3': None,
         }
+        lobe_map = {
+            'Upper lobe of left lung': 'left_upper_lobe',
+            'Lower lobe of left lung': 'left_lower_lobe',
+            'Upper lobe of right lung': 'right_upper_lobe',
+            'Middle lobe of right lung': 'right_middle_lobe',
+            'Lower lobe of right lung': 'right_lower_lobe',
+        }
         for seq in lesion.ContentSequence:
             descriptor = seq.ConceptNameCodeSequence[0]
+            # Get the lesion ID
             if descriptor.CodeValue == self.tracking_code:
                 lesion_id = seq.TextValue
+            # Get the location
             if descriptor.CodeValue == self.finding_site_sequence:
                 location = seq.ContentSequence[0].ConceptCodeSequence[0].CodeMeaning
-                lesion_measurements['location'] = location
+                lesion_measurements['location'] = lobe_map.get(location, location)
+            # Get the review status
             if descriptor.CodeValue == lesion_review_status_code:
                 if seq.TextValue in ('Measurement accepted', 'Measurement auto-confirmed'):
                     review_status = 'accepted'
