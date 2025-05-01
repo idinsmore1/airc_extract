@@ -303,7 +303,35 @@ class AircReport:
         :return: a dictionary of the lung parenchyma measurements
         """
         # Get the measurements
-        pass
+        if not hasattr(measure_content, "ContentSequence"):
+            logger.warning(f'No parenchyma measurements found in {self.current_filename}')
+            return None
+        parenchyma_data = {}
+        location_map = {
+            'BothLungs': 'both_lungs',
+            'LeftUpperLobe': 'left_upper_lobe',
+            'LeftLowerLobe': 'left_lower_lobe',
+            'RightUpperLobe': 'right_upper_lobe',
+            'RightMiddleLobe': 'right_middle_lobe',
+            'RightLowerLobe': 'right_lower_lobe',
+        }
+        meausure_code = 'CHESTCT0201'
+        for location in measure_content.ContentSequence:
+            location_content = location.ContentSequence
+            for seq in location_content:
+                descriptor = seq.ConceptNameCodeSequence[0]
+                if descriptor.CodeValue == self.tracking_code:
+                    location_id = location_map.get(seq.TextValue)
+                    if location_id is None:
+                        continue
+                if descriptor.CodeValue == meausure_code:
+                    if not hasattr(seq, "MeasuredValueSequence"):
+                        # If there is no measurement, skip this sequence
+                        continue
+                    # Get the measurement value
+                    measurement_value = seq.MeasuredValueSequence[0].NumericValue
+                    parenchyma_data[location_id] = float(measurement_value)
+        return parenchyma_data
 
     def _extract_coronary_calcium_measurements(self, measure_content: dcm.DataElement) -> dict:
         """Extract the coronary calcium measurements from the dicom data
