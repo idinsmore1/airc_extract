@@ -39,27 +39,13 @@ class AircReport:
     finding_site_sequence = '363698007'
     tracking_code = '112039'
 
-    def __init__(self, dicom_dir: Path | str):
+    def __init__(self, dicom_files: list[Path|str]):
         self.report_data = {}
-        self.dicom_dir = dicom_dir if isinstance(dicom_dir, Path) else Path(dicom_dir)
-
-        # Check if the directory exists
-        if not dicom_dir.exists():
-            error_message = f"{dicom_dir} does not exist."
-            logger.error(error_message)
-            raise FileNotFoundError(error_message)
-        # Check if the directory is empty
-        self.dicom_files = list(dicom_dir.glob("*.dcm"))
-        if not self.dicom_files:
-            self.dicom_files = list(dicom_dir.glob("*"))
-            if not self.dicom_files:
-                error_message = f"{dicom_dir} is empty."
-                logger.error(error_message)
-                raise EmptyReportError(error_message)
+        self.dicom_files = dicom_files
         # Filter out dicoms that cannot be read
         self._validate_dicoms()
         if not self.dicom_data:
-            error_message = f"No valid DICOM files found in {dicom_dir}."
+            error_message = f"No valid DICOM files found."
             logger.error(error_message)
             raise EmptyReportError(error_message)
 
@@ -71,7 +57,7 @@ class AircReport:
                 data = dcm.dcmread(dicom)
                 valid_dicoms.append(data)
             except Exception as e:
-                logger.error(f"Failed to read {self.dicom_dir / dicom}: {e}")
+                logger.error(f"Failed to read {dicom}: {e}")
         self.dicom_data = valid_dicoms
 
     def extract_report(self) -> dict:
