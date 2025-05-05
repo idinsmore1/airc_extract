@@ -11,10 +11,12 @@ dependencies = [
     "loguru>=0.7.3",
     "polars>=1.28.1",
     "pydicom>=3.0.1",
+    "tqdm>=4.67.1",
 ]
 
 [project.scripts]
 airc-extract = "airc_extract:main"
+airc-create-config = "airc_extract:create_airc_config"
 
 [build-system]
 requires = ["hatchling"]

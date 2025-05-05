@@ -1,3 +1,4 @@
+import configparser
 import pydicom as dcm
 import polars as pl
 
@@ -19,7 +20,7 @@ class ContentMissingError(ValueError):
         logger.error(message)
 
 
-class AircReport:
+class AIRCReport:
     code_map = {
         "CHESTCT0203": "lung_parenchyma",
         "CHESTCT0304": "coronary_calcium",
@@ -195,7 +196,7 @@ class AircReport:
 
     def _match_code_to_airc_measurement(self, content):
         id_content = content[0]
-        code_map = AircReport.code_map
+        code_map = AIRCReport.code_map
         if not hasattr(id_content, "ConceptCodeSequence"):
             logger.error(f"No AIRC Code found in {self.current_filename}")
             raise ContentMissingError("No AIRC Code found in DICOM data")
@@ -263,7 +264,7 @@ class AircReport:
         # Get the measurements
         lesion_data = {}
         lesion_list = measure_content.ContentSequence
-        lesion_data['lesion_count'] = len(lesion_list)
+        # lesion_data['lesion_count'] = len(lesion_list)
         for idx, lesion in enumerate(lesion_list):
             lesion_id, lesion_measurements = self._extract_lung_lesion_measurement(lesion, idx)
             if lesion_id is not None and lesion_measurements is not None:
@@ -368,7 +369,7 @@ class AircReport:
                     if seq.TextValue == 'Heart':
                         measure_name = 'heart_volume_cm3'
                     elif seq.TextValue == 'Calcium score':
-                        measure_name = 'coronary_calc_mm3'
+                        measure_name = 'coronary_calcification_volume_mm3'
                 if hasattr(seq, "MeasuredValueSequence"):
                     measure_value = seq.MeasuredValueSequence[0].NumericValue
             if measure_name is not None and measure_value is not None:
@@ -482,3 +483,6 @@ class AircReport:
             logger.warning(f'No pulmonary density measurements found in {self.current_filename}')
             return None
         return density_data
+    
+
+def extract_airc_data(config)
