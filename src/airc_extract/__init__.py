@@ -1,3 +1,4 @@
+import os
 import sys
 import argparse
 import configparser
@@ -5,9 +6,9 @@ import sqlite3
 
 from datetime import datetime
 from loguru import logger
-from pathlib import Path
-from airc_extract.db_ops import create_new_data_db
-from airc_extract.airc_report import AIRCReport
+from pathlib import Path, PureWindowsPath
+from airc_extract.db_ops import create_new_data_db, query_unextracted_data, insert_data_to_db
+from airc_extract.airc_report import AIRCReport, EmptyReportError
 
 
 def main() -> None:
@@ -25,6 +26,38 @@ def main() -> None:
     _setup_logging(config)
     _test_connections(config)
     logger.info("Starting AIRC data extraction...")
+    airc_data_extractor(config)
+
+
+def airc_data_extractor(config: configparser.ConfigParser) -> None:
+    """
+    Main function to extract AIRC data.
+    :param config: Configuration object
+    """
+    data_dir = Path(config.get("GENERAL", "dicom_data_dir"))
+    unextracted_studies = query_unextracted_data(config)
+    total_studies = len(unextracted_studies)
+    logger.info(
+        f"Found {total_studies} unextracted studies in the DICOM database."
+    )
+    for i, study in enumerate(unextracted_studies, start=1):
+        # study_ex = data_dir / Path(PureWindowsPath(study[0]))
+        # if study_ex.exists():
+        try:
+            study = [data_dir / Path(PureWindowsPath(file)) for file in study]
+            report = AIRCReport(study)
+            report.extract_report()
+            insert_data_to_db(report, config)
+        except EmptyReportError as e:
+            logger.error(f"{i}/{total_studies} - {report.series_uid} has no valid dicom files. Skipping extraction. {e}")
+            continue
+        except Exception as e:
+            logger.critical(f"{i}/{total_studies} - {report.series_uid} failed: {e}")
+            continue
+        logger.success(
+            f"{i}/{total_studies} - {report.series_uid} extracted and inserted into database."
+        )
+        
 
 
 def _setup_logging(config: configparser.ConfigParser) -> None:
@@ -35,22 +68,20 @@ def _setup_logging(config: configparser.ConfigParser) -> None:
     log_level = config.get("GENERAL", "log_level")
     log_level_file = config.get("GENERAL", "log_level_file")
     today = datetime.today().strftime("%Y_%m_%d")
-
     # Set up terminal logging
     logger.remove()
     logger.add(
         sys.stderr,
         level=log_level,
+        enqueue=True,
         format="<green>{time:YYYY-MM-DD at HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     )
-
     # Set up file logging
     logger.add(
         Path(log_dir) / f"airc_data_extractor_{today}.log",
         level=log_level_file,
-        rotation="1 MB",
-        retention="7 days",
-        compression="zip",
+        rotation="1 GB",
+        enqueue=True,
         format="{time:YYYY-MM-DD at HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
     )
 
@@ -112,6 +143,13 @@ def create_airc_config() -> None:
         help="Path to the DicomConquest database",
     )
     parser.add_argument(
+        "--dicom-data-dir",
+        '-dd',
+        type=str,
+        required=True,
+        help="Path to the DicomConquest data directory",
+    )
+    parser.add_argument(
         "--data-db", "-o", type=str, required=True, help="Path to the data database"
     )
     parser.add_argument(
@@ -136,10 +174,12 @@ def create_airc_config() -> None:
     config_path = lib_path / "config.ini"
     config = configparser.ConfigParser()
     dicom_db = Path(args.dicom_db).resolve().absolute()
+    dicom_data_dir = Path(args.dicom_data_dir).resolve().absolute()
     data_db = Path(args.data_db).resolve().absolute()
     log_dir = Path(args.log_dir).resolve().absolute()
     config["GENERAL"] = {
         "dicom_db": str(dicom_db),
+        "dicom_data_dir": str(dicom_data_dir),
         "data_db": str(data_db),
         "log_dir": log_dir,
         "log_level": args.log_level_term,
@@ -160,6 +200,7 @@ def create_airc_config() -> None:
     logger.success(
         f"""Created configuration file at {config_path} with the following settings:
         DICOM database: {dicom_db}
+        DICOM data directory: {dicom_data_dir}
         Data database: {data_db}
         Log directory: {log_dir}
         Terminal Log level: {args.log_level_term}

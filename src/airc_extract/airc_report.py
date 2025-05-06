@@ -9,13 +9,11 @@ from loguru import logger
 class EmptyReportError(FileNotFoundError):
     def __init__(self, message: str):
         super().__init__(message)
-        logger.error(message)
-
+        
 
 class ContentMissingError(ValueError):
     def __init__(self, message: str):
         super().__init__(message)
-        logger.error(message)
 
 
 class AIRCReport:
@@ -41,14 +39,9 @@ class AIRCReport:
     def __init__(self, dicom_files: list[Path | str]):
         self.report_data = {}
         self.dicom_files = dicom_files
-        # Filter out dicoms that cannot be read
-        self._validate_dicoms()
-        if not self.dicom_data:
-            error_message = f"No valid DICOM files found."
-            logger.error(error_message)
-            raise EmptyReportError(error_message)
+        self.series_uid = str(dicom_files[0]).split('/')[-1].split('_')[0]
 
-    def _validate_dicoms(self):
+    def validate_dicoms(self):
         """Validate that all dicoms can be read properly and remove those that can't"""
         valid_dicoms = []
         for dicom in self.dicom_files:
@@ -56,13 +49,17 @@ class AIRCReport:
                 data = dcm.dcmread(dicom)
                 valid_dicoms.append(data)
             except Exception as e:
-                logger.error(f"Failed to read {dicom}: {e}")
+                continue
+        if not valid_dicoms:
+            raise EmptyReportError('')
         self.dicom_data = valid_dicoms
 
     def extract_report(self) -> dict:
         """Extract the report data from the dicom files"""
+        self.validate_dicoms()
         self.validate_identifiers()
         self.extract_measurements()
+        logger.debug(f'{self.series_uid} AIRC Report extracted successfully')
 
     def validate_identifiers(self) -> None:
         """validate that the identifiers are present in the dicom data and are equal"""
@@ -499,9 +496,9 @@ class AIRCReport:
                     "status": status,
                 }
         if not vertebra_name or not vertebra_measurements:
-            logger.warning(
-                f"No vertebra name or measurements found for a vertebra in {self.current_filename}"
-            )
+            # logger.warning(
+            #     f"No vertebra name or measurements found for a vertebra in {self.current_filename}"
+            # )
             return None, None
         return vertebra_name, vertebra_measurements
 

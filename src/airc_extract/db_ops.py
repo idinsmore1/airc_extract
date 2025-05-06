@@ -199,6 +199,60 @@ def create_new_data_db(data_db_path: Path | str) -> None:
         )
 
 
+def query_unextracted_data(config: ConfigParser) -> list[list]:
+    """
+    Query the DicomConquest database for unextracted dicom files.
+    :param config: Configuration object
+    :return: List of lists. Each inner list contains the dicom file paths for a single study.
+    """
+    dicom_db = config.get("GENERAL", "dicom_db")
+    data_db = config.get("GENERAL", "data_db")
+    conn = sqlite3.connect(dicom_db)
+    with conn:
+        cursor = conn.cursor()
+        cursor.execute(f"ATTACH DATABASE '{data_db}' AS data_db")
+        query = """SELECT main.DICOMImages.SeriesInst as series_uid, main.DICOMImages.ObjectFile as filepath
+                FROM main.DICOMImages
+                LEFT JOIN data_db.main ON main.DICOMImages.SeriesInst = data_db.main.series_uid
+                
+                """
+        hold = "WHERE data_db.main.series_uid IS NULL"
+        cursor.execute(query)
+        unextracted = (
+            pl.read_database(query, conn)
+            .group_by("series_uid")
+            .agg(pl.col("filepath").unique().alias("filepaths"))["filepaths"]
+            .to_list()
+        )
+        cursor.execute("DETACH DATABASE data_db")
+    conn.close()
+    return unextracted
+
+def insert_data_to_db(report, config: ConfigParser) -> None:
+    """
+    Insert AIRC Report into the database.
+    :param report: AIRC Report Object
+    :param config: Configuration object
+    """
+    airc_data = report.report_data
+    data_db = config.get("GENERAL", "data_db")
+    conn = sqlite3.connect(data_db)
+    with conn:
+        for table in TABLE_COLUMNS:
+            if table not in airc_data:
+                logger.debug(f"{table.title()} data not found in {report.series_uid}. Skipping database insert.")
+                continue
+            insert_statement = get_insert_statement(table)
+            formatted_data = format_table_input(airc_data, table)
+            try:
+                conn.executemany(insert_statement, formatted_data)
+                conn.commit()
+            except sqlite3.Error as e:
+                logger.error(f"Error inserting {report.series_uid} into {table}: {e}")
+    conn.close()
+    logger.debug(f"{report.series_uid} inserted into database.")
+
+
 def format_table_input(report_data: dict, table_name: str) -> tuple:
     """
     Format the input data for a given table.
@@ -260,33 +314,4 @@ def get_insert_statement(table_name: str) -> str:
     return f"REPLACE INTO {table_name} ({columns}) VALUES({placeholders})"
 
 
-def query_unextracted_data(config: ConfigParser) -> list[list]:
-    """
-    Query the DicomConquest database for unextracted dicom files.
-    :param config: Configuration object
-    :return: List of lists. Each inner list contains the dicom file paths for a single study.
-    """
-    dicom_db = config.get("GENERAL", "dicom_db")
-    data_db = config.get("GENERAL", "data_db")
-    conn = sqlite3.connect(dicom_db)
-    with conn:
-        cursor = conn.cursor()
-        cursor.execute(f"ATTACH DATABASE '{data_db}' AS data_db")
-        query = """SELECT main.DICOMImages.SeriesInst as series_uid, main.DICOMImages.ObjectFile as filepath
-                FROM main.DICOMImages
-                LEFT JOIN data_db.main ON main.DICOMImages.SeriesInst = data_db.main.series_uid
-                WHERE data_db.main.series_uid IS NULL
-                """
-        cursor.execute(query)
-        unextracted = (
-            pl.read_database(query, conn)
-            .group_by('series_uid')
-            .agg(
-                pl.col('filepath').unique().alias('filepaths')
-            )
-            ['filepaths']
-            .to_list()
-        )
-        cursor.execute("DETACH DATABASE data_db")
-    conn.close()
-    return unextracted
+
