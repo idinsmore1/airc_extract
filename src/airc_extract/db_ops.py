@@ -2,7 +2,7 @@ import sqlite3
 from loguru import logger
 from pathlib import Path
 
-DATA_COLUMNS = {
+TABLE_COLUMNS = {
     "main": [
         "series_uid",
         "mrn",
@@ -16,7 +16,7 @@ DATA_COLUMNS = {
         "lung",
     ],
     "aorta": [
-        # "series_uid",
+        "series_uid",
         "max_ascending",
         "max_descending",
         "sinus_of_valsalva",
@@ -30,19 +30,19 @@ DATA_COLUMNS = {
         "celiac_artery_origin",
     ],
     "spine": [
-        # "series_uid",
+        "series_uid",
         "vertebra",
         "direction",
         "length_mm",
         "status",
     ],
     "cardio": [
-        # "series_uid",
+        "series_uid",
         "heart_volume_cm3",
         "coronary_calcification_volume_mm3",
     ],
     "lesions": [
-        # "series_uid",
+        "series_uid",
         "lesion_id",
         "location",
         "review_status",
@@ -53,8 +53,53 @@ DATA_COLUMNS = {
         "volume_mm3",
     ],
     "lung": [
-        # "series_uid",
+        "series_uid",
         "location",
+        "opacity_score",
+        "volume_cm3",
+        "opacity_volume_cm3",
+        "opacity_percent",
+        "high_opacity_volume_cm3",
+        "high_opacity_percent",
+        "mean_hu",
+        "mean_hu_opacity",
+        "low_parenchyma_hu_percent",
+    ],
+}
+# These are the columns that are not part of the primary key for each table
+# We define these to allow .get() to work on the report data
+DATA_COLUMNS = {
+    "aorta": [
+        "max_ascending",
+        "max_descending",
+        "sinus_of_valsalva",
+        "sinotubular_junction",
+        "mid_ascending",
+        "proximal_arch",
+        "mid_arch",
+        "proximal_descending",
+        "mid_descending",
+        "diaphragm_level",
+        "celiac_artery_origin",
+    ],
+    "spine": [
+        "length_mm",
+        "status",
+    ],
+    "cardio": [
+        "heart_volume_cm3",
+        "coronary_calcification_volume_mm3",
+    ],
+    "lesions": [
+        "location",
+        "review_status",
+        "max_2d_diameter_mm",
+        "min_2d_diameter_mm",
+        "mean_2d_diameter_mm",
+        "max_3d_diameter_mm",
+        "volume_mm3",
+    ],
+    "lung": [
         "opacity_score",
         "volume_cm3",
         "opacity_volume_cm3",
@@ -157,28 +202,28 @@ def format_table_input(report_data: dict, table_name: str) -> tuple:
     :param table_name: Name of the table to format the data for
     :return: Tuple of formatted data
     """
-    table_cols = TABLE_COLUMNS.get(table_name)
+    data_cols = DATA_COLUMNS.get(table_name)
     match table_name:
         case "main":
-            formatted = [tuple(report_data.get(col) for col in table_cols)]
+            formatted = [tuple(report_data.get(table_name).values())]
         case "lesions":
             formatted = []
-            for lesion, data in report_data.get('lesions', {}).items():
-                row = (report_data.get('series_uid'), lesion, *list(data.values()))
+            for lesion, data in report_data.get('lesions').items():
+                row = (report_data.get('series_uid'), lesion, *[data.get(col) for col in data_cols])
                 formatted.append(row)
         case "spine":
             formatted = []
-            for vertebra, measurements in report_data.get('spine', {}).items():
+            for vertebra, measurements in report_data.get('spine').items():
                 for direction, data in measurements.items():
-                    row = (report_data.get('series_uid'), vertebra, direction, *list(data.values()))
+                    row = (report_data.get('series_uid'), vertebra, direction, *[data.get(col) for col in data_cols])
                     formatted.append(row)
         case "lung":
             formatted = []
-            for location, data in report_data.get('lung', {}).items():
-                row = (report_data.get('series_uid'), location, *list(data.values()))
+            for location, data in report_data.get('lung').items():
+                row = (report_data.get('series_uid'), location, *[data.get(col) for col in data_cols])
                 formatted.append(row)
         case _:
-            formatted = [(report_data.get('series_uid'), *list(report_data[table_name].values()))]
+            formatted = [(report_data.get('series_uid'), *[report_data[table_name].get(col) for col in data_cols])]
     return formatted
         
             
