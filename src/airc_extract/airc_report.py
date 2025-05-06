@@ -63,7 +63,6 @@ class AIRCReport:
         """Extract the report data from the dicom files"""
         self.validate_identifiers()
         self.extract_measurements()
-        
 
     def validate_identifiers(self) -> None:
         """validate that the identifiers are present in the dicom data and are equal"""

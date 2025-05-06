@@ -19,9 +19,6 @@ def main() -> None:
         default=Path(__file__).resolve().parent / "config.ini",
         help="Path to the configuration file. If you ran create_airc_config, this is will point to the default config file.",
     )
-    parser.add_argument(
-        "--save-json", "-j", action="store_true", help="Save output as JSON. WARNING: This will overwrite an existing JSON output and be a large file."
-    )
     args = parser.parse_args()
 
     config = _load_config(args.config)
@@ -56,6 +53,7 @@ def _setup_logging(config: configparser.ConfigParser) -> None:
         compression="zip",
         format="{time:YYYY-MM-DD at HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
     )
+
 
 def _load_config(config_path: str) -> configparser.ConfigParser:
     # Set up the configuration parser

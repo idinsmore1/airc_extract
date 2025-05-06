@@ -1,5 +1,7 @@
 import sqlite3
+import polars as pl
 from loguru import logger
+from configparser import ConfigParser
 from pathlib import Path
 
 TABLE_COLUMNS = {
@@ -112,6 +114,7 @@ DATA_COLUMNS = {
     ],
 }
 
+
 def create_new_data_db(data_db_path: Path | str) -> None:
     """
     Create a new output data database for AIRC data extraction with all required tables.
@@ -195,6 +198,7 @@ def create_new_data_db(data_db_path: Path | str) -> None:
             f"Created new data database at {data_db_path} with required tables."
         )
 
+
 def format_table_input(report_data: dict, table_name: str) -> tuple:
     """
     Format the input data for a given table.
@@ -208,25 +212,42 @@ def format_table_input(report_data: dict, table_name: str) -> tuple:
             formatted = [tuple(report_data.get(table_name).values())]
         case "lesions":
             formatted = []
-            for lesion, data in report_data.get('lesions').items():
-                row = (report_data.get('series_uid'), lesion, *[data.get(col) for col in data_cols])
+            for lesion, data in report_data.get("lesions").items():
+                row = (
+                    report_data.get("series_uid"),
+                    lesion,
+                    *[data.get(col) for col in data_cols],
+                )
                 formatted.append(row)
         case "spine":
             formatted = []
-            for vertebra, measurements in report_data.get('spine').items():
+            for vertebra, measurements in report_data.get("spine").items():
                 for direction, data in measurements.items():
-                    row = (report_data.get('series_uid'), vertebra, direction, *[data.get(col) for col in data_cols])
+                    row = (
+                        report_data.get("series_uid"),
+                        vertebra,
+                        direction,
+                        *[data.get(col) for col in data_cols],
+                    )
                     formatted.append(row)
         case "lung":
             formatted = []
-            for location, data in report_data.get('lung').items():
-                row = (report_data.get('series_uid'), location, *[data.get(col) for col in data_cols])
+            for location, data in report_data.get("lung").items():
+                row = (
+                    report_data.get("series_uid"),
+                    location,
+                    *[data.get(col) for col in data_cols],
+                )
                 formatted.append(row)
         case _:
-            formatted = [(report_data.get('series_uid'), *[report_data[table_name].get(col) for col in data_cols])]
+            formatted = [
+                (
+                    report_data.get("series_uid"),
+                    *[report_data[table_name].get(col) for col in data_cols],
+                )
+            ]
     return formatted
-        
-            
+
 
 def get_insert_statement(table_name: str) -> str:
     """
@@ -237,3 +258,35 @@ def get_insert_statement(table_name: str) -> str:
     columns = ", ".join(TABLE_COLUMNS[table_name])
     placeholders = ", ".join(["?"] * len(TABLE_COLUMNS[table_name]))
     return f"REPLACE INTO {table_name} ({columns}) VALUES({placeholders})"
+
+
+def query_unextracted_data(config: ConfigParser) -> list[list]:
+    """
+    Query the DicomConquest database for unextracted dicom files.
+    :param config: Configuration object
+    :return: List of lists. Each inner list contains the dicom file paths for a single study.
+    """
+    dicom_db = config.get("GENERAL", "dicom_db")
+    data_db = config.get("GENERAL", "data_db")
+    conn = sqlite3.connect(dicom_db)
+    with conn:
+        cursor = conn.cursor()
+        cursor.execute(f"ATTACH DATABASE '{data_db}' AS data_db")
+        query = """SELECT main.DICOMImages.SeriesInst as series_uid, main.DICOMImages.ObjectFile as filepath
+                FROM main.DICOMImages
+                LEFT JOIN data_db.main ON main.DICOMImages.SeriesInst = data_db.main.series_uid
+                WHERE data_db.main.series_uid IS NULL
+                """
+        cursor.execute(query)
+        unextracted = (
+            pl.read_database(query, conn)
+            .group_by('series_uid')
+            .agg(
+                pl.col('filepath').unique().alias('filepaths')
+            )
+            ['filepaths']
+            .to_list()
+        )
+        cursor.execute("DETACH DATABASE data_db")
+    conn.close()
+    return unextracted
