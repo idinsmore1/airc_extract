@@ -213,10 +213,13 @@ def query_unextracted_data(config: ConfigParser) -> list[list]:
         cursor.execute(f"ATTACH DATABASE '{data_db}' AS data_db")
         query = """SELECT main.DICOMImages.SeriesInst as series_uid, main.DICOMImages.ObjectFile as filepath
                 FROM main.DICOMImages
+                INNER JOIN main.DICOMSeries
+                ON main.DICOMImages.SeriesInst = main.DICOMSeries.SeriesInst
                 LEFT JOIN data_db.main ON main.DICOMImages.SeriesInst = data_db.main.series_uid
-                
+                WHERE data_db.main.series_uid IS NULL
+                AND main.DICOMSeries.Modality = 'SR'
                 """
-        hold = "WHERE data_db.main.series_uid IS NULL"
+
         cursor.execute(query)
         unextracted = (
             pl.read_database(query, conn)

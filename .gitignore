@@ -11,3 +11,4 @@ __pycache__/
 *.egg
 *.log
 *.ini
+.ruff_cache
