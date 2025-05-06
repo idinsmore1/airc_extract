@@ -228,6 +228,7 @@ def query_unextracted_data(config: ConfigParser) -> list[list]:
     conn.close()
     return unextracted
 
+
 def insert_data_to_db(report, config: ConfigParser) -> None:
     """
     Insert AIRC Report into the database.
@@ -240,7 +241,9 @@ def insert_data_to_db(report, config: ConfigParser) -> None:
     with conn:
         for table in TABLE_COLUMNS:
             if table not in airc_data:
-                logger.debug(f"{table.title()} data not found in {report.series_uid}. Skipping database insert.")
+                logger.debug(
+                    f"{table.title()} data not found in {report.series_uid}. Skipping database insert."
+                )
                 continue
             insert_statement = get_insert_statement(table)
             formatted_data = format_table_input(airc_data, table)
@@ -312,6 +315,3 @@ def get_insert_statement(table_name: str) -> str:
     columns = ", ".join(TABLE_COLUMNS[table_name])
     placeholders = ", ".join(["?"] * len(TABLE_COLUMNS[table_name]))
     return f"REPLACE INTO {table_name} ({columns}) VALUES({placeholders})"
-
-
-

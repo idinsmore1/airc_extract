@@ -7,7 +7,11 @@ import sqlite3
 from datetime import datetime
 from loguru import logger
 from pathlib import Path, PureWindowsPath
-from airc_extract.db_ops import create_new_data_db, query_unextracted_data, insert_data_to_db
+from airc_extract.db_ops import (
+    create_new_data_db,
+    query_unextracted_data,
+    insert_data_to_db,
+)
 from airc_extract.airc_report import AIRCReport, EmptyReportError
 
 
@@ -37,9 +41,7 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
     data_dir = Path(config.get("GENERAL", "dicom_data_dir"))
     unextracted_studies = query_unextracted_data(config)
     total_studies = len(unextracted_studies)
-    logger.info(
-        f"Found {total_studies} unextracted studies in the DICOM database."
-    )
+    logger.info(f"Found {total_studies} unextracted studies in the DICOM database.")
     for i, study in enumerate(unextracted_studies, start=1):
         # study_ex = data_dir / Path(PureWindowsPath(study[0]))
         # if study_ex.exists():
@@ -49,7 +51,9 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
             report.extract_report()
             insert_data_to_db(report, config)
         except EmptyReportError as e:
-            logger.error(f"{i}/{total_studies} - {report.series_uid} has no valid dicom files. Skipping extraction. {e}")
+            logger.error(
+                f"{i}/{total_studies} - {report.series_uid} has no valid dicom files. Skipping extraction. {e}"
+            )
             continue
         except Exception as e:
             logger.critical(f"{i}/{total_studies} - {report.series_uid} failed: {e}")
@@ -57,7 +61,6 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
         logger.success(
             f"{i}/{total_studies} - {report.series_uid} extracted and inserted into database."
         )
-        
 
 
 def _setup_logging(config: configparser.ConfigParser) -> None:
@@ -144,7 +147,7 @@ def create_airc_config() -> None:
     )
     parser.add_argument(
         "--dicom-data-dir",
-        '-dd',
+        "-dd",
         type=str,
         required=True,
         help="Path to the DicomConquest data directory",

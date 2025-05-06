@@ -9,7 +9,7 @@ from loguru import logger
 class EmptyReportError(FileNotFoundError):
     def __init__(self, message: str):
         super().__init__(message)
-        
+
 
 class ContentMissingError(ValueError):
     def __init__(self, message: str):
@@ -39,7 +39,7 @@ class AIRCReport:
     def __init__(self, dicom_files: list[Path | str]):
         self.report_data = {}
         self.dicom_files = dicom_files
-        self.series_uid = str(dicom_files[0]).split('/')[-1].split('_')[0]
+        self.series_uid = str(dicom_files[0]).split("/")[-1].split("_")[0]
 
     def validate_dicoms(self):
         """Validate that all dicoms can be read properly and remove those that can't"""
@@ -51,7 +51,7 @@ class AIRCReport:
             except Exception as e:
                 continue
         if not valid_dicoms:
-            raise EmptyReportError('')
+            raise EmptyReportError("")
         self.dicom_data = valid_dicoms
 
     def extract_report(self) -> dict:
@@ -59,7 +59,7 @@ class AIRCReport:
         self.validate_dicoms()
         self.validate_identifiers()
         self.extract_measurements()
-        logger.debug(f'{self.series_uid} AIRC Report extracted successfully')
+        logger.debug(f"{self.series_uid} AIRC Report extracted successfully")
 
     def validate_identifiers(self) -> None:
         """validate that the identifiers are present in the dicom data and are equal"""
