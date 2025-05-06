@@ -1,0 +1,194 @@
+import sqlite3
+from loguru import logger
+from pathlib import Path
+
+DATA_COLUMNS = {
+    "main": [
+        "series_uid",
+        "mrn",
+        "accession",
+        "study_date",
+        "sex",
+        "aorta",
+        "spine",
+        "cardio",
+        "lesions",
+        "lung",
+    ],
+    "aorta": [
+        # "series_uid",
+        "max_ascending",
+        "max_descending",
+        "sinus_of_valsalva",
+        "sinotubular_junction",
+        "mid_ascending",
+        "proximal_arch",
+        "mid_arch",
+        "proximal_descending",
+        "mid_descending",
+        "diaphragm_level",
+        "celiac_artery_origin",
+    ],
+    "spine": [
+        # "series_uid",
+        "vertebra",
+        "direction",
+        "length_mm",
+        "status",
+    ],
+    "cardio": [
+        # "series_uid",
+        "heart_volume_cm3",
+        "coronary_calcification_volume_mm3",
+    ],
+    "lesions": [
+        # "series_uid",
+        "lesion_id",
+        "location",
+        "review_status",
+        "max_2d_diameter_mm",
+        "min_2d_diameter_mm",
+        "mean_2d_diameter_mm",
+        "max_3d_diameter_mm",
+        "volume_mm3",
+    ],
+    "lung": [
+        # "series_uid",
+        "location",
+        "opacity_score",
+        "volume_cm3",
+        "opacity_volume_cm3",
+        "opacity_percent",
+        "high_opacity_volume_cm3",
+        "high_opacity_percent",
+        "mean_hu",
+        "mean_hu_opacity",
+        "low_parenchyma_hu_percent",
+    ],
+}
+
+def create_new_data_db(data_db_path: Path | str) -> None:
+    """
+    Create a new output data database for AIRC data extraction with all required tables.
+    :param data_db_path: Path to the new data database
+    """
+    main = """CREATE TABLE IF NOT EXISTS main (
+        series_uid TEXT PRIMARY KEY,
+        mrn TEXT,
+        accession TEXT,
+        study_date TEXT,
+        sex TEXT,
+        aorta INTEGER,
+        spine INTEGER,
+        cardio INTEGER,
+        lesions INTEGER,
+        lung INTEGER
+    )"""
+    aorta = """CREATE TABLE IF NOT EXISTS aorta (
+        series_uid TEXT PRIMARY KEY,
+        max_ascending INTEGER,
+        max_descending INTEGER,
+        sinus_of_valsalva INTEGER,
+        sinotubular_junction INTEGER,
+        mid_ascending INTEGER,
+        proximal_arch INTEGER,
+        mid_arch INTEGER,
+        proximal_descending INTEGER,
+        mid_descending INTEGER,
+        diaphragm_level INTEGER,
+        celiac_artery_origin INTEGER
+    )"""
+    spine = """CREATE TABLE IF NOT EXISTS spine (
+        series_uid TEXT NOT NULL,
+        vertebra TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        length_mm REAL,
+        status TEXT,
+        PRIMARY KEY (series_uid, vertebra, direction)
+    )"""
+    cardio = """CREATE TABLE IF NOT EXISTS cardio (
+        series_uid TEXT PRIMARY KEY,
+        heart_volume_cm3 REAL,
+        coronary_calcification_volume_mm3 REAL
+    )"""
+    lesions = """CREATE TABLE IF NOT EXISTS lesions (
+        series_uid TEXT NOT NULL,
+        lesion_id TEXT NOT NULL,
+        location TEXT,
+        review_status TEXT,
+        max_2d_diameter_mm REAL,
+        min_2d_diameter_mm REAL,
+        mean_2d_diameter_mm REAL,
+        max_3d_diameter_mm REAL,
+        volume_mm3 REAL,
+        PRIMARY KEY (series_uid, lesion_id)
+    )"""
+    lung = """CREATE TABLE IF NOT EXISTS lung (
+        series_uid TEXT NOT NULL,
+        location TEXT NOT NULL,
+        opacity_score REAL,
+        volume_cm3 REAL,
+        opacity_volume_cm3 REAL,
+        opacity_percent REAL,
+        high_opacity_volume_cm3 REAL,
+        high_opacity_percent REAL,
+        mean_hu REAL,
+        mean_hu_opacity REAL,
+        low_parenchyma_hu_percent REAL,
+        PRIMARY KEY (series_uid, location)
+    )"""
+    with sqlite3.connect(data_db_path) as conn:
+        cursor = conn.cursor()
+        for table in [main, aorta, spine, cardio, lesions, lung]:
+            try:
+                cursor.execute(table)
+            except sqlite3.Error as e:
+                logger.error(f"Error creating table: {e}")
+                print(table)
+        conn.commit()
+        logger.success(
+            f"Created new data database at {data_db_path} with required tables."
+        )
+
+def format_table_input(report_data: dict, table_name: str) -> tuple:
+    """
+    Format the input data for a given table.
+    :param report_data: Dictionary containing the report data
+    :param table_name: Name of the table to format the data for
+    :return: Tuple of formatted data
+    """
+    table_cols = TABLE_COLUMNS.get(table_name)
+    match table_name:
+        case "main":
+            formatted = [tuple(report_data.get(col) for col in table_cols)]
+        case "lesions":
+            formatted = []
+            for lesion, data in report_data.get('lesions', {}).items():
+                row = (report_data.get('series_uid'), lesion, *list(data.values()))
+                formatted.append(row)
+        case "spine":
+            formatted = []
+            for vertebra, measurements in report_data.get('spine', {}).items():
+                for direction, data in measurements.items():
+                    row = (report_data.get('series_uid'), vertebra, direction, *list(data.values()))
+                    formatted.append(row)
+        case "lung":
+            formatted = []
+            for location, data in report_data.get('lung', {}).items():
+                row = (report_data.get('series_uid'), location, *list(data.values()))
+                formatted.append(row)
+        case _:
+            formatted = [(report_data.get('series_uid'), *list(report_data[table_name].values()))]
+    return formatted
+        
+            
+
+def get_insert_statement(table_name: str) -> str:
+    """
+    Get the insert statement for a given table name.
+    :param table_name: Name of the table
+    :return: Insert statement
+    """
+    columns = ", ".join(TABLE_COLUMNS[table_name])
+    placeholders = ", ".join(["?"] * len(TABLE_COLUMNS[table_name]))
+    return f"REPLACE INTO {table_name} ({columns}) VALUES({placeholders})"
