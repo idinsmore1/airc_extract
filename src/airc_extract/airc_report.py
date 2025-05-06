@@ -100,7 +100,10 @@ class AIRCReport:
             try:
                 measurement, measures = self._extract_measurement_from_dicom_data(data)
                 self.report_data[measurement] = measures
-            except ContentMissingError as e:
+            except Exception as e:
+                logger.warning(
+                    f"Error extracting measurement from DICOM data: {e}"
+                )
                 continue
         self._merge_lung_data()
         self._create_main_dict()
@@ -259,9 +262,16 @@ class AIRCReport:
             "RID905": "celiac_artery_origin",
         }
         diameters = {}
+        if not hasattr(measure_content, "ContentSequence"):
+            logger.debug(
+                f"No aortic diameters found in {self.current_filename} aortic measure report"
+            )
+            return None
         aorta_measures = measure_content.ContentSequence
         for measure in aorta_measures:
             # Each measure is itself a sequence of data describing where the measure is taken and the value
+            if not hasattr(measure, "ContentSequence"):
+                continue
             measure_content = measure.ContentSequence
             diameter_sequence = "RID13432"
             site_location = None
@@ -285,10 +295,10 @@ class AIRCReport:
             if site_location is not None and diameter is not None:
                 diameters[site_location] = diameter
         if not diameters:
-            logger.error(
+            logger.debug(
                 f"No aortic diameters found in {self.current_filename} aortic measure report"
             )
-            raise ContentMissingError("No aortic diameters found in DICOM data")
+            return None
         return diameters
 
     def _extract_lung_lesion_measurements(
@@ -300,21 +310,31 @@ class AIRCReport:
         """
         # Get the measurements
         lesion_data = {}
+        if not hasattr(measure_content, "ContentSequence"):
+            logger.debug(
+                f"No lung lesion measurements found in {self.current_filename}"
+            )
+            return None
         lesion_list = measure_content.ContentSequence
         # lesion_data['lesion_count'] = len(lesion_list)
         for idx, lesion in enumerate(lesion_list):
             lesion_id, lesion_measurements = self._extract_lung_lesion_measurement(
                 lesion, idx
             )
+            if lesion_id == 'No finding':
+                # Skip this lesion as it is not a valid measurement
+                continue
             if lesion_id is not None and lesion_measurements is not None:
                 lesion_data[lesion_id] = lesion_measurements
+        if not lesion_data:
+            return None
         return lesion_data
 
     def _extract_lung_lesion_measurement(
         self, lesion: dcm.DataElement, idx: int
     ) -> tuple[str, dict]:
         if not hasattr(lesion, "ContentSequence"):
-            logger.warning(
+            logger.debug(
                 f"No ContentSequence found in {self.current_filename} for lesion {idx}"
             )
             return None, None
@@ -380,7 +400,7 @@ class AIRCReport:
         """
         # Get the measurements
         if not hasattr(measure_content, "ContentSequence"):
-            logger.warning(
+            logger.debug(
                 f"No parenchyma measurements found in {self.current_filename}"
             )
             return None
@@ -414,6 +434,11 @@ class AIRCReport:
         :return: a dictionary of the coronary calcium measurements
         """
         calc_data = {}
+        if not hasattr(measure_content, "ContentSequence"):
+            logger.debug(
+                f"No coronary calcium measurements found in {self.current_filename}"
+            )
+            return None
         for measure in measure_content.ContentSequence:
             measure_name = None
             measure_value = None
@@ -437,6 +462,9 @@ class AIRCReport:
         """
         # Get the measurements
         spine_data = {}
+        if not hasattr(measure_content, "ContentSequence"):
+            logger.debug(f"No spine measurements found in {self.current_filename}")
+            return None
         # Each sequence in this content is a vertebra's measurements
         for vertebra in measure_content.ContentSequence:
             vertebra_name, vertebra_measurements = self._extract_vertebra_measurement(
@@ -511,7 +539,7 @@ class AIRCReport:
         """
         # Get the measurements
         if not hasattr(measure_content, "ContentSequence"):
-            logger.warning(
+            logger.debug(
                 f"No parenchyma measurements found in {self.current_filename}"
             )
             return None
