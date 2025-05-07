@@ -29,7 +29,6 @@ def main() -> None:
     config = _load_config(args.config)
     _setup_logging(config)
     _test_connections(config)
-    logger.info("Starting AIRC data extraction...")
     airc_data_extractor(config)
 
 
@@ -38,10 +37,12 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
     Main function to extract AIRC data.
     :param config: Configuration object
     """
+    logger.info("Starting AIRC data extraction...")
     data_dir = Path(config.get("GENERAL", "dicom_data_dir"))
     unextracted_studies = query_unextracted_data(config)
     total_studies = len(unextracted_studies)
     logger.info(f"Found {total_studies} unextracted studies in the DICOM database.")
+    successes = 0
     for i, study in enumerate(unextracted_studies, start=1):
         # study_ex = data_dir / Path(PureWindowsPath(study[0]))
         # if study_ex.exists():
@@ -61,6 +62,8 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
         logger.success(
             f"{i}/{total_studies} - {report.series_uid} extracted and inserted into database."
         )
+        successes += 1
+    logger.success(f'Extraction completed. Successfully inserted {successes} / {total_studies} into output database.')
 
 
 def _setup_logging(config: configparser.ConfigParser) -> None:

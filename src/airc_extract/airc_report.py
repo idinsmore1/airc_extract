@@ -165,34 +165,16 @@ class AIRCReport:
         # Get the measurement data
         match measurement:
             case "lung_parenchyma":
-                logger.debug(
-                    f"Extracting lung parenchyma measurements from {self.current_filename}"
-                )
                 measures = self._extract_lung_parenchyma_measurements(measure_content)
             case "cardio":
-                logger.debug(
-                    f"Extracting cardio measurements from {self.current_filename}"
-                )
                 measures = self._extract_coronary_calcium_measurements(measure_content)
             case "aorta":
-                logger.debug(
-                    f"Extracting aortic diameter measurements from {self.current_filename}"
-                )
                 measures = self._extract_aortic_diameter_measurements(measure_content)
             case "spine":
-                logger.debug(
-                    f"Extracting spine measurements from {self.current_filename}"
-                )
                 measures = self._extract_spine_measurements(measure_content)
             case "pulmonary_densities":
-                logger.debug(
-                    f"Extracting pulmonary density measurements from {self.current_filename}"
-                )
                 measures = self._extract_pulmonary_density_measurements(measure_content)
             case "lesions":
-                logger.debug(
-                    f"Extracting lung lesion measurements from {self.current_filename}"
-                )
                 measures = self._extract_lung_lesion_measurements(measure_content)
         # Return the measurement data and the measurement name
         return measurement, measures
