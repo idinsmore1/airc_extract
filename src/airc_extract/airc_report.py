@@ -488,6 +488,7 @@ class AIRCReport:
             return None, None
         # These are the internal codes used by the AIRC for the spine measurements
         measurement_seq_code = "121207"
+        hounsfield_unit_code = "112031"
         direction_code = "106233006"
         status_code = "CHECTCT0001"
 
@@ -521,6 +522,11 @@ class AIRCReport:
                     "length_mm": float(measurement_value),
                     "status": status,
                 }
+            if descriptor.CodeValue == hounsfield_unit_code:
+                if not hasattr(seq, "MeasuredValueSequence"):
+                    continue
+                measurement_value = seq.MeasuredValueSequence[0].NumericValue
+                vertebra_measurements['mean_hu'] = float(measurement_value)
         if not vertebra_name or not vertebra_measurements:
             # logger.warning(
             #     f"No vertebra name or measurements found for a vertebra in {self.current_filename}"

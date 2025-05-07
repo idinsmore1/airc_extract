@@ -34,6 +34,7 @@ TABLE_COLUMNS = {
     "spine": [
         "series_uid",
         "vertebra",
+        "mean_hu",
         "direction",
         "length_mm",
         "status",
@@ -149,7 +150,8 @@ def create_new_data_db(data_db_path: Path | str) -> None:
     spine = """CREATE TABLE IF NOT EXISTS spine (
         series_uid TEXT NOT NULL,
         vertebra TEXT NOT NULL,
-        direction TEXT NOT NULL,
+        mean_hu REAL,
+        direction TEXT,
         length_mm REAL,
         status TEXT,
         PRIMARY KEY (series_uid, vertebra, direction)
@@ -282,10 +284,12 @@ def format_table_input(report_data: dict, table_name: str) -> tuple:
         case "spine":
             formatted = []
             for vertebra, measurements in report_data.get("spine").items():
+                mean_hu = measurements.pop('mean_hu', None)
                 for direction, data in measurements.items():
                     row = (
                         report_data.get("series_uid"),
                         vertebra,
+                        mean_hu,
                         direction,
                         *[data.get(col) for col in data_cols],
                     )
