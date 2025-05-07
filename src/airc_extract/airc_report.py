@@ -38,8 +38,8 @@ class AIRCReport:
 
     def __init__(self, dicom_files: list[Path | str]):
         self.report_data = {}
-        self.dicom_files = dicom_files
-        self.series_uid = str(dicom_files[0]).split("/")[-1].split("_")[0]
+        self.dicom_files = [Path(x) if not isinstance(x, Path) else x for x in dicom_files]
+        self.series_uid = self.dicom_files[0].name.split('_')[0]
 
     def validate_dicoms(self):
         """Validate that all dicoms can be read properly and remove those that can't"""
@@ -97,14 +97,18 @@ class AIRCReport:
 
     def extract_measurements(self) -> None:
         for data in self.dicom_data:
-            try:
-                measurement, measures = self._extract_measurement_from_dicom_data(data)
+            # try:
+            #     measurement, measures = self._extract_measurement_from_dicom_data(data)
+            #     if measures is not None:
+            #         self.report_data[measurement] = measures
+            # except Exception as e:
+            #     logger.warning(
+            #         f"Error extracting measurement from DICOM data: {e}"
+            #     )
+            #     continue
+            measurement, measures = self._extract_measurement_from_dicom_data(data)
+            if measures is not None:
                 self.report_data[measurement] = measures
-            except Exception as e:
-                logger.warning(
-                    f"Error extracting measurement from DICOM data: {e}"
-                )
-                continue
         self._merge_lung_data()
         self._create_main_dict()
 
@@ -191,7 +195,6 @@ class AIRCReport:
                 )
                 measures = self._extract_lung_lesion_measurements(measure_content)
         # Return the measurement data and the measurement name
-
         return measurement, measures
 
     def _check_for_content(self, data):
@@ -261,11 +264,10 @@ class AIRCReport:
             "CHESTCT0406": "diaphragm_level",
             "RID905": "celiac_artery_origin",
         }
+        not_found_message = f"No aortic diameters found in {self.current_filename}"
         diameters = {}
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(
-                f"No aortic diameters found in {self.current_filename} aortic measure report"
-            )
+            logger.warning(not_found_message)
             return None
         aorta_measures = measure_content.ContentSequence
         for measure in aorta_measures:
@@ -295,9 +297,7 @@ class AIRCReport:
             if site_location is not None and diameter is not None:
                 diameters[site_location] = diameter
         if not diameters:
-            logger.debug(
-                f"No aortic diameters found in {self.current_filename} aortic measure report"
-            )
+            logger.warning(not_found_message)
             return None
         return diameters
 
@@ -310,10 +310,9 @@ class AIRCReport:
         """
         # Get the measurements
         lesion_data = {}
+        not_found_message = f"No lung lesion measurements found in {self.current_filename}"
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(
-                f"No lung lesion measurements found in {self.current_filename}"
-            )
+            logger.warning(not_found_message)
             return None
         lesion_list = measure_content.ContentSequence
         # lesion_data['lesion_count'] = len(lesion_list)
@@ -327,6 +326,7 @@ class AIRCReport:
             if lesion_id is not None and lesion_measurements is not None:
                 lesion_data[lesion_id] = lesion_measurements
         if not lesion_data:
+            logger.warning(not_found_message)
             return None
         return lesion_data
 
@@ -399,10 +399,9 @@ class AIRCReport:
         :return: a dictionary of the lung parenchyma measurements
         """
         # Get the measurements
+        not_found_message = f"No parenchyma measurements found in {self.current_filename}"
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(
-                f"No parenchyma measurements found in {self.current_filename}"
-            )
+            logger.warning(not_found_message)
             return None
         parenchyma_data = {}
 
@@ -424,6 +423,9 @@ class AIRCReport:
                     parenchyma_data[location_id] = {
                         "low_parenchyma_hu_percent": float(measurement_value)
                     }
+        if not parenchyma_data:
+            logger.warning(not_found_message)
+            return None
         return parenchyma_data
 
     def _extract_coronary_calcium_measurements(
@@ -433,15 +435,18 @@ class AIRCReport:
         :param measure_content: the dicom data
         :return: a dictionary of the coronary calcium measurements
         """
+        not_found_message = f"No cardio measurements found in {self.current_filename}"
         calc_data = {}
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(
-                f"No coronary calcium measurements found in {self.current_filename}"
-            )
+            logger.warning(not_found_message)
             return None
         for measure in measure_content.ContentSequence:
             measure_name = None
             measure_value = None
+            if hasattr(measure, 'TextValue'):
+                if measure.TextValue == 'No finding':
+                    logger.warning(not_found_message)
+                    return None
             for seq in measure.ContentSequence:
                 if seq.ConceptNameCodeSequence[0].CodeValue == self.tracking_code:
                     # This is the location
@@ -449,10 +454,17 @@ class AIRCReport:
                         measure_name = "heart_volume_cm3"
                     elif seq.TextValue == "Calcium score":
                         measure_name = "coronary_calcification_volume_mm3"
+                    # It appears that this "No finding" can appear in two locations?
+                    elif seq.TextValue == 'No finding':
+                        logger.warning(not_found_message)
+                        return None
                 if hasattr(seq, "MeasuredValueSequence"):
                     measure_value = seq.MeasuredValueSequence[0].NumericValue
             if measure_name is not None and measure_value is not None:
                 calc_data[measure_name] = float(measure_value)
+        if not calc_data:
+            logger.warning(not_found_message)
+            return None
         return calc_data
 
     def _extract_spine_measurements(self, measure_content: dcm.DataElement) -> dict:
@@ -462,18 +474,22 @@ class AIRCReport:
         """
         # Get the measurements
         spine_data = {}
+        not_found_message = f"No spine measurements found in {self.current_filename}"
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(f"No spine measurements found in {self.current_filename}")
+            logger.warning(not_found_message)
             return None
         # Each sequence in this content is a vertebra's measurements
         for vertebra in measure_content.ContentSequence:
             vertebra_name, vertebra_measurements = self._extract_vertebra_measurement(
                 vertebra
             )
-            if not vertebra_name or not vertebra_measurements:
+            if vertebra_name is None or vertebra_measurements is None:
                 continue
             # If we have a vertebra name and measurements, add them to the dictionary
             spine_data[vertebra_name] = vertebra_measurements
+        if not spine_data:
+            logger.warning(not_found_message)
+            return None
         return spine_data
 
     def _extract_vertebra_measurement(
@@ -538,10 +554,9 @@ class AIRCReport:
         :return: a dictionary of the pulmonary density measurements
         """
         # Get the measurements
+        not_found_message = f"No parenchyma measurements found in {self.current_filename}"
         if not hasattr(measure_content, "ContentSequence"):
-            logger.debug(
-                f"No parenchyma measurements found in {self.current_filename}"
-            )
+            logger.warning(not_found_message)
             return None
         density_data = {}
         density_code_map = {
@@ -577,8 +592,6 @@ class AIRCReport:
             if location_id is not None and location_data:
                 density_data[location_id] = location_data
         if not density_data:
-            logger.warning(
-                f"No pulmonary density measurements found in {self.current_filename}"
-            )
+            logger.warning(not_found_message)
             return None
         return density_data

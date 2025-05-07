@@ -46,7 +46,7 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
         # study_ex = data_dir / Path(PureWindowsPath(study[0]))
         # if study_ex.exists():
         try:
-            study = [data_dir / Path(PureWindowsPath(file)) for file in study]
+            study = [data_dir / Path(file) for file in study]
             report = AIRCReport(study)
             report.extract_report()
             insert_data_to_db(report, config)
