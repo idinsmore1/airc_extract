@@ -44,8 +44,6 @@ def airc_data_extractor(config: configparser.ConfigParser) -> None:
     logger.info(f"Found {total_studies} unextracted studies in the DICOM database.")
     successes = 0
     for i, study in enumerate(unextracted_studies, start=1):
-        # study_ex = data_dir / Path(PureWindowsPath(study[0]))
-        # if study_ex.exists():
         try:
             study = [data_dir / Path(file) for file in study]
             report = AIRCReport(study)
