@@ -542,7 +542,7 @@ class AIRCReport:
         :return: a dictionary of the pulmonary density measurements
         """
         # Get the measurements
-        not_found_message = f"No parenchyma measurements found in {self.current_filename}"
+        not_found_message = f"No pulmonary density measurements found in {self.current_filename}"
         if not hasattr(measure_content, "ContentSequence"):
             logger.warning(not_found_message)
             return None
