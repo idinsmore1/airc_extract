@@ -69,6 +69,7 @@ class AIRCReport:
             "PatientID": ref.PatientID,
             "AccessionNumber": ref.AccessionNumber,
             "SeriesInstanceUID": ref.SeriesInstanceUID,
+            "StudyInstanceUID": ref.StudyInstanceUID,
             "PatientSex": ref.PatientSex,
             "StudyDate": ref.StudyDate,
         }
@@ -90,10 +91,12 @@ class AIRCReport:
         self.report_data["mrn"] = ref.PatientID
         self.report_data["accession"] = ref.AccessionNumber
         self.report_data["series_uid"] = ref.SeriesInstanceUID
+        self.report_data["study_uid"] = ref.StudyInstanceUID
         self.report_data["sex"] = ref.PatientSex
         self.report_data["scan_date"] = date.fromisoformat(ref.StudyDate).strftime(
             "%Y-%m-%d"
         )
+        self.report_data["extraction_date"] = date.today().isoformat()
 
     def extract_measurements(self) -> None:
         for data in self.dicom_data:
@@ -140,9 +143,11 @@ class AIRCReport:
         """Create a dictionary of the main table data for the output database"""
         self.report_data["main"] = {
             "series_uid": self.report_data.get("series_uid"),
+            "study_uid": self.report_data.get("study_uid"),
             "mrn": self.report_data.get("mrn"),
             "accession": self.report_data.get("accession"),
             "study_date": self.report_data.get("scan_date"),
+            "extraction_date": self.report_data.get("extraction_date"),
             "sex": self.report_data.get("sex"),
             "aorta": 1 if self.report_data.get("aorta") else 0,
             "spine": 1 if self.report_data.get("spine") else 0,

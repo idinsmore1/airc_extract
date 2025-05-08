@@ -123,9 +123,11 @@ def create_new_data_db(data_db_path: Path | str) -> None:
     """
     main = """CREATE TABLE IF NOT EXISTS main (
         series_uid TEXT PRIMARY KEY,
+        study_uid TEXT,
         mrn TEXT,
         accession TEXT,
         study_date TEXT,
+        extraction_date TEXT,
         sex TEXT,
         aorta INTEGER,
         spine INTEGER,
